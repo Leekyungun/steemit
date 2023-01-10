@@ -47,23 +47,23 @@ func (steemit *Steemit) BaseRequest(body []byte) ([]byte, error) {
 	return respBody, nil
 }
 
-func (steemit *Steemit) getAccount() (*GetAccountResponse, error) {
-	var Params []interface{}
-	var Account [1][1]string
-	Account[0][0] = "lku"
+func (steemit *Steemit) getAccount(accountName []string) (*GetAccountResponse, error) {
+	var params []interface{}
+	var account [1][]string
+	account[0] = accountName
 
-	Params = append(Params, "database_api")
-	Params = append(Params, "get_accounts")
-	Params = append(Params, Account)
+	params = append(params, "database_api")
+	params = append(params, "get_accounts")
+	params = append(params, account)
 
-	rpcRequest := RpcRequest{1, "2.0", "call", Params}
-	pbytes, err := json.Marshal(rpcRequest)
+	rpcRequest := RpcRequest{1, "2.0", "call", params}
+	requestBody, err := json.Marshal(rpcRequest)
 	if err != nil {
 		fmt.Println("getAccount", "json.Marshal", err)
 		return nil, err
 	}
 
-	response, err := steemit.BaseRequest(pbytes)
+	response, err := steemit.BaseRequest(requestBody)
 	if err != nil {
 		return nil, err
 	}
@@ -83,31 +83,22 @@ func (steemit *Steemit) getAccount() (*GetAccountResponse, error) {
 func (steemit *Steemit) GetConfig() (*GlobalPropertiesResponse, error) {
 	Params := make([]interface{}, 0)
 	rpcRequest := RpcRequest{2, "2.0", "condenser_api.get_dynamic_global_properties", Params}
-	pbytes, err := json.Marshal(rpcRequest)
+	requestBody, err := json.Marshal(rpcRequest)
 	if err != nil {
-		fmt.Println("err", err)
+		fmt.Println("GetConfig", "err", err)
 		return nil, err
 	}
 
-	buff := bytes.NewBuffer(pbytes)
-	resp, err := http.Post(steemit.BaseUrl, "application/json", buff)
+	response, err := steemit.BaseRequest(requestBody)
 	if err != nil {
-		fmt.Println("err", err)
 		return nil, err
 	}
 
-	defer resp.Body.Close()
-
-	// Response 체크.
 	globalPropertiesResponse := new(GlobalPropertiesResponse)
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err == nil {
-		err := json.Unmarshal(respBody, globalPropertiesResponse)
-		if err != nil {
-			fmt.Println("err", err)
-			return nil, err
-		}
+	err = json.Unmarshal(response, globalPropertiesResponse)
+	if err != nil {
+		fmt.Println("GetConfig", "err", err)
+		return nil, err
 	}
 
 	return globalPropertiesResponse, nil
@@ -116,38 +107,24 @@ func (steemit *Steemit) GetConfig() (*GlobalPropertiesResponse, error) {
 func main() {
 	baseUrl := "https://api.steemit.com"
 	steemit := NewSteemit(baseUrl)
-	account, err := steemit.getAccount()
+	account, err := steemit.getAccount([]string{"lku"})
 	if err != nil {
 		return
 	}
 
-	fmt.Println("account", account)
-	fmt.Println("steem balance", account.Result[0].Balance)
-	fmt.Println("SBD balance", account.Result[0].SbdBalance)
-	fmt.Println("reward steem balance", account.Result[0].RewardSteemBalance)
-	fmt.Println("reward SBD balance", account.Result[0].RewardSbdBalance)
-	fmt.Println("reward steem power balance", account.Result[0].RewardVestingSteem)
-	fmt.Println("reward steem power balance", account.Result[0].RewardVestingBalance)
+	accountAsset := account.Asset()
 
-	fmt.Println("vest shares", account.Result[0].VestingShares)
-	fmt.Println("vest balance", account.Result[0].VestingBalance)
-	fmt.Println("deleted vest shares", account.Result[0].DelegatedVestingShares)
+	fmt.Printf("%+v\n", accountAsset)
 
 	globalProperty, err := steemit.GetConfig()
 	if err != nil {
 		return
 	}
 
-	fmt.Println("============")
-	fmt.Println("globalProperty")
-	fmt.Println("globalProperty.Result.TotalVestingShares", globalProperty.Result.TotalVestingShares)
-	fmt.Println("globalProperty.Result.TotalVestingFundSteem", globalProperty.Result.TotalVestingFundSteem)
+	globalProperties := globalProperty.Convert()
+	fmt.Printf("%+v\n", globalProperties)
 
-	/*
-			내 스팀 = 토탈스팀 * 내 주식 / 토탈 주식
-			내 스팀 = 167050752.555 * 10675732.181640 / 297947788335.180300
-		167037797.286 * 10679990.460432 /297902892385.261137 = 5,988.4013453584
-		167037797.286 * 5187.305547 /297902892385.261137 = 5,988.4013453584
-	*/
-
+	// 내 스팀 = 토탈스팀 * 내 주식 / 토탈 주식
+	steemPower := globalProperties.TotalVestingFundSteem.Mul(*accountAsset.VestShares).Div(*globalProperties.TotalVestingShares)
+	fmt.Println("steemPower", steemPower)
 }

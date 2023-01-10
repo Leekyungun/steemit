@@ -1,5 +1,10 @@
 package main
 
+import (
+	"github.com/shopspring/decimal"
+	"strings"
+)
+
 type RpcRequest struct {
 	Id      int           `json:"id"`
 	Jsonrpc string        `json:"jsonrpc"`
@@ -97,6 +102,41 @@ type GetAccountResponse struct {
 	Id int `json:"id"`
 }
 
+type AccountAsset struct {
+	SteemBalance            *decimal.Decimal
+	SBDBalance              *decimal.Decimal
+	RewardSteemBalance      *decimal.Decimal
+	RewardSBDBalance        *decimal.Decimal
+	RewardSteemPowerBalance *decimal.Decimal
+	RewardVestsShares       *decimal.Decimal
+	VestShares              *decimal.Decimal
+	DelegationVestShares    *decimal.Decimal
+}
+
+func ConvertElem(origin string) (*decimal.Decimal, error) {
+	numberString := strings.Split(origin, " ")
+	number, err := decimal.NewFromString(numberString[0])
+	if err != nil {
+		return nil, err
+	}
+
+	return &number, nil
+}
+
+func (account *GetAccountResponse) Asset() *AccountAsset {
+	accountAsset := new(AccountAsset)
+	accountAsset.SteemBalance, _ = ConvertElem(account.Result[0].Balance)
+	accountAsset.SBDBalance, _ = ConvertElem(account.Result[0].SbdBalance)
+	accountAsset.RewardSteemBalance, _ = ConvertElem(account.Result[0].RewardSteemBalance)
+	accountAsset.RewardSBDBalance, _ = ConvertElem(account.Result[0].RewardSbdBalance)
+	accountAsset.RewardSteemPowerBalance, _ = ConvertElem(account.Result[0].RewardVestingSteem)
+	accountAsset.RewardVestsShares, _ = ConvertElem(account.Result[0].RewardVestingBalance)
+	accountAsset.VestShares, _ = ConvertElem(account.Result[0].VestingShares)
+	accountAsset.DelegationVestShares, _ = ConvertElem(account.Result[0].DelegatedVestingShares)
+
+	return accountAsset
+}
+
 type GlobalPropertiesResponse struct {
 	Id      int    `json:"id"`
 	Jsonrpc string `json:"jsonrpc"`
@@ -141,4 +181,16 @@ type GlobalPropertiesResponse struct {
 		SpsIntervalLedger               string `json:"sps_interval_ledger"`
 		DownvotePoolPercent             int    `json:"downvote_pool_percent"`
 	} `json:"result"`
+}
+
+func (properties *GlobalPropertiesResponse) Convert() *GlobalProperties {
+	globalProperties := new(GlobalProperties)
+	globalProperties.TotalVestingShares, _ = ConvertElem(properties.Result.TotalVestingShares)
+	globalProperties.TotalVestingFundSteem, _ = ConvertElem(properties.Result.TotalVestingFundSteem)
+	return globalProperties
+}
+
+type GlobalProperties struct {
+	TotalVestingShares    *decimal.Decimal
+	TotalVestingFundSteem *decimal.Decimal
 }
