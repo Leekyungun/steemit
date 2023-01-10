@@ -16,6 +16,37 @@ func NewSteemit(baseUrl string) *Steemit {
 	return &Steemit{baseUrl}
 }
 
+func (steemit *Steemit) BaseRequest(body []byte) ([]byte, error) {
+	title := "Post"
+
+	BodyBuffer := bytes.NewBuffer(body)
+	resp, err := http.Post(steemit.BaseUrl, "application/json", BodyBuffer)
+	if err != nil {
+		fmt.Println(title, "http.Post", err)
+		return nil, err
+	}
+
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Println(title, "Body.Close", err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println(title, "resp.StatusCode not 200", resp)
+		return nil, err
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println(title, "io.ReadAll", err)
+		return nil, err
+	}
+
+	return respBody, nil
+}
+
 func (steemit *Steemit) getAccount() (*GetAccountResponse, error) {
 	var Params []interface{}
 	var Account [1][1]string
@@ -32,26 +63,18 @@ func (steemit *Steemit) getAccount() (*GetAccountResponse, error) {
 		return nil, err
 	}
 
-	buff := bytes.NewBuffer(pbytes)
-	resp, err := http.Post(steemit.BaseUrl, "application/json", buff)
+	response, err := steemit.BaseRequest(pbytes)
 	if err != nil {
-		fmt.Println("getAccount", "http.Post", err)
 		return nil, err
 	}
-
-	defer resp.Body.Close()
 
 	// Response 체크.
 	getAccountResponse := new(GetAccountResponse)
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err == nil {
-		fmt.Println(string(respBody))
-		err := json.Unmarshal(respBody, getAccountResponse)
-		if err != nil {
-			fmt.Println("getAccount", "json.Unmarshal", err)
-			return nil, err
-		}
+	err = json.Unmarshal(response, getAccountResponse)
+	if err != nil {
+		fmt.Println("getAccount", "json.Unmarshal", err)
+		return nil, err
 	}
 
 	return getAccountResponse, nil
